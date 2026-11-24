@@ -1,0 +1,11 @@
+#!/bin/sh
+# heavy-shim: queue scripted `claude -p` calls (HEAVY_CLAUDE_SLOTS at a time). Interactive claude passes straight through.
+case " $* " in
+  *" -p "*|*" --print "*) exec heavy --claude "$@" ;;
+esac
+self_dir=$(cd "$(dirname "$0")" && pwd)
+IFS=:; for d in $PATH; do
+  [ "$d" = "$self_dir" ] && continue
+  [ -x "$d/claude" ] && exec "$d/claude" "$@"
+done
+echo "heavy-shim: real claude not found on PATH" >&2; exit 127

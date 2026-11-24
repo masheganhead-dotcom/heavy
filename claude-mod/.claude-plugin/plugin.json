@@ -1,0 +1,1 @@
+{ "name": "heavy-pane", "version": "0.1.0", "description": "Side pane + status line for heavy: memory, queued/paused jobs, Claude token usage", "types": "./types/index.d.ts", "license": "MIT" }
