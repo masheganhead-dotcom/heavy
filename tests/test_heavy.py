@@ -7,8 +7,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import memwatch as m
 
-# 1. danger judgment: (pressure level, free %, swap GB) -> 0 ok / 1 warn / 2 danger
-for args, want in [((2, 39, 41), 0), ((2, 27, 54), 2), ((2, 25, 30), 1), ((4, 50, 10), 2), ((1, 60, 50), 0), ((2, 15, 20), 2)]:
+# 1. danger judgment: (pressure level, free %, swapouts/sec) -> 0 ok / 1 warn / 2 danger
+#    (2, 40, 0) is a real case: 55GB of idle swap, nothing growing -> must NOT pause
+for args, want in [((2, 40, 0), 0), ((2, 27, 5000), 2), ((2, 25, 0), 1), ((4, 50, 0), 2), ((1, 60, 9000), 0), ((2, 15, 0), 2)]:
     assert m.judge(*args) == want, (args, m.judge(*args))
 
 # 2. queue: two heavy jobs never overlap

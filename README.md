@@ -42,15 +42,15 @@ heavy tokens
 | `HEAVY_MAX_GB` | none | hard memory cap via `taskpolicy -m` (**kills** the job when exceeded) |
 | `HEAVY_CLAUDE_SLOTS` | 3 | concurrent `claude -p` calls |
 | `HEAVY_BIG_GB` | 4 | memwatch treats non-heavy jobs this big as "heavy" |
-| `HEAVY_SWAP_DANGER_GB` | 45 | absolute swap that counts as thrashing |
+| `HEAVY_SWAP_RATE` | 2000 | swapouts/sec (16 KB pages) that count as thrashing |
 | `HEAVY_PROTECT` | — | comma-separated command fragments memwatch must never pause (e.g. your always-on servers) |
 
 ## How it decides
 
-macOS exposes a real pressure signal (`kern.memorystatus_vm_pressure_level`: normal / warn / critical). memwatch acts only when pressure is up **and** (free memory < 20% **or** swap > 45 GB), and only if that lasts two checks (~10 s). It checks every 20 s, and every 5 s once pressure rises.
+macOS exposes a real pressure signal (`kern.memorystatus_vm_pressure_level`: normal / warn / critical). memwatch acts only when pressure is up **and** (free memory < 20% **or** swapping out fast right now), and only if that lasts two checks (~10 s). It checks every 20 s, and every 5 s once pressure rises.
 
 Lessons baked in:
-- **Swap percentage lies on macOS.** The OS grows and shrinks total swap, so `used/total` reads ~90% even when memory is fine. heavy looks at absolute swap.
+- **Swap size lies on macOS.** The OS grows and shrinks total swap, so `used/total` reads ~90%, and 55 GB of old idle swap is harmless. heavy watches the swap-out *rate* (`vm_stat`), not the size.
 - **RSS lies too.** It excludes swapped-out memory, so the 30 GB culprit looks small. heavy uses `top`'s footprint.
 - **Pausing never frees memory instantly.** It stops growth; held pages drift to swap. If you need memory back *now*, kill the job yourself.
 - **Safety net.** A job paused 3 h+ resumes unless pressure is critical, and you get a reminder every 30 min while anything is paused.

@@ -89,7 +89,8 @@ def tokens_refresh():
     cc = shutil.which("ccusage")
     if not cc: raise RuntimeError("ccusage not installed (npm i -g ccusage)")
     since = time.strftime("%Y%m%d", time.localtime(time.time() - 8 * 86400))
-    days = json.loads(subprocess.run([cc, "daily", "--since", since, "--json"], capture_output=True, text=True, timeout=120).stdout)["daily"]
+    days = json.loads(subprocess.run([cc, "daily", "--since", since, "--json"], capture_output=True, text=True, timeout=120,
+                                   env=dict(os.environ, PATH=f"{Path(cc).parent}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")).stdout)["daily"]
     today = time.strftime("%Y-%m-%d")
     t = next((d for d in days if d["period"] == today), {"totalTokens": 0, "totalCost": 0})
     past = [d for d in days if d["period"] != today][-7:]

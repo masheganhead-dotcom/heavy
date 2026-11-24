@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from heavy import mem, D, Q, MIN_FREE
 
 STATE = D / "memwatch.json"; LOG = D / "memwatch.log"
-SWAP_DANGER_GB = float(os.environ.get("HEAVY_SWAP_DANGER_GB", "45"))  # absolute swap that means "thrashing"
+SWAP_RATE_DANGER = float(os.environ.get("HEAVY_SWAP_RATE", "2000"))  # swapouts/sec (16KB pages) that mean "thrashing right now"
 MAX_PAUSE = 3 * 3600   # safety net: a job paused 3h+ resumes unless pressure is critical
 BIG_GB = float(os.environ.get("HEAVY_BIG_GB", "4"))
 KINDS = re.compile(r"^(python[\d.]*|Python|node|ffmpeg|bun|java)$")   # scripts/converters only; GUI apps are never paused
@@ -115,23 +115,26 @@ def foreign(st, level, lvl, free):
     return len(paused)
 
 
-def judge(lvl, free, used):
-    """0 ok · 1 warn · 2 danger. Pressure AND (low free OR swap thrash), like earlyoom's AND rule.
-    Swap *ratio* is useless on macOS: the OS resizes total swap, so it always reads ~90%."""
-    if lvl >= 4 or (lvl >= 2 and (free < 20 or used > SWAP_DANGER_GB)): return 2
+def judge(lvl, free, rate):
+    """0 ok · 1 warn · 2 danger. Pressure AND (low free OR swapping out fast right now), like earlyoom's AND rule.
+    Swap *size* is useless on macOS: the OS resizes total swap, and 55GB of old idle swap with zero
+    new swapouts is harmless. Only the swapout *rate* means thrashing."""
+    if lvl >= 4 or (lvl >= 2 and (free < 20 or rate > SWAP_RATE_DANGER)): return 2
     return 1 if lvl >= 2 and free < 30 else 0
 
 
 def tick(st, streak):
     lvl, free, used = mem()
-    level = judge(lvl, free, used)
+    so = int(re.search(r"Swapouts:\s+(\d+)", sh("vm_stat")).group(1)); t = time.time()
+    rate = (so - st.get("so", so)) / max(1, t - st.get("so_t", t - 1)); st["so"], st["so_t"] = so, t
+    level = judge(lvl, free, rate)
     streak = streak + 1 if level else 0
     act = level if streak >= 2 else 0           # must persist 2 checks (~10s) before acting, like oomd
     ok_lvl = 1 if level == 0 else max(lvl, 2)
     n = pause_resume(act, ok_lvl, free) + foreign(st, act, ok_lvl, free)
     now = time.time()
     if level and now - st.get(str(level), 0) > 900:
-        note("🔴 Mac memory critical" if level == 2 else "🟡 Mac memory warning", f"{free}% free · swap {used:.0f}GB · biggest: {', '.join(top3())}"); st[str(level)] = now
+        note("🔴 Mac memory critical" if level == 2 else "🟡 Mac memory warning", f"{free}% free · swap {used:.0f}GB (+{rate:.0f} pages/s) · biggest: {', '.join(top3())}"); st[str(level)] = now
     if n and now - st.get("remind", 0) > 1800:
         note("⏸ jobs still paused", f"{n} paused · resume when memory frees up (or after 3h) · heavy status"); st["remind"] = now
     if level == 0 and now - st.get("tok", 0) > 600:
